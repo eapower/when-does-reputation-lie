@@ -5,18 +5,16 @@ library(latticeExtra)
 
 #### Figure 1
 
-ba <- read.csv("big_fest_particip.csv", header=TRUE, as.is=TRUE)
+ba <- read.csv("rep_change.csv", header=TRUE, as.is=TRUE)
 
-ba$pchange<-(ba$AllRep.Redo/408)-(ba$AllRep.Orig/2880)
-
-## 42 is max in village, 39 is max in big vow-takers; 0 is min in village, 2 is min in big vow-takers
-
-ba$s <- (ba$KSup3.In.Degree - min(ba$KSup3.In.Degree, na.rm = TRUE))/( max(ba$KSup3.In.Degree, na.rm = TRUE) -  min(ba$KSup3.In.Degree, na.rm = TRUE))
+## in degree is our proxy for social capital, to align with the model. 
+## 42 is max in degree in the village, 39 is max among big vow-takers; 0 is min in village, 2 is min among big vow-takers
+ba$s <- (ba$in_degree - min(ba$in_degree, na.rm = TRUE))/( max(ba$in_degree, na.rm = TRUE) -  min(ba$in_degree, na.rm = TRUE))
 ba$s_jitter <- ave(as.numeric(ba$s), ba$s, 
                    FUN = function(x) x + rnorm(length(x), sd = .01))
 
 
-ggplot(ba, aes(x=(s_jitter), y=AllRep.Orig/2880, colour=SCBC)) + geom_point(aes(shape=ba$SCBC, colour=SCBC)) + labs(x = "Social Capital",y = "(Change in) Reputation") + scale_y_continuous(limits=c(-0.001,0.13)) + geom_segment(aes(y=AllRep.Orig/2880,yend=AllRep.Orig/2880+pchange,x=s_jitter,xend=s_jitter),lineend = "round",size=1.5, alpha = 0.5) + scale_color_brewer(palette="Set2") + theme(legend.position="none")
+ggplot(ba, aes(x=(s_jitter), y=pbefore, colour=SCBC)) + geom_point(aes(shape=ba$SCBC, colour=SCBC)) + labs(x = "Social Capital",y = "(Change in) Reputation") + scale_y_continuous(limits=c(-0.001,0.13)) + geom_segment(aes(y=pbefore,yend=pbefore+pchange,x=s_jitter,xend=s_jitter),lineend = "round",size=1.5, alpha = 0.5) + scale_color_brewer(palette="Set2") + theme(legend.position="none")
 
 
 
