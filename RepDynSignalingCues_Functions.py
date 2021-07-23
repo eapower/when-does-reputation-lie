@@ -3,41 +3,45 @@ from scipy.optimize import fsolve
 import matplotlib.pyplot as plt
 
 def qualprior(cues,support,lb,ub):
-    """S is the publicly visible support of a person. It is the proportion of the public that expressed support at the event (E(d)/Population).
-    lb and ub are the lower bound and upper bound probabilities onlookers ascribe to an individual being low quality in case of no support at all (lb) and high quality in case of unanimous support (ub)"""
+    """This corresponds to f(S_i) in the text. lb and ub are the lower bound and upper bound probabilities onlookers ascribe to an individual being low quality in case of no support at all (lb) and high quality in case of unanimous support (ub)"""
     if cues == 'True':
         return lb + (ub-lb)*support
     else:
         return .5
 
 def posteriorsuccess(cues,pH,pL,thetaH,thetaL,support,lb,ub):
-    """This is the posterior probability that an individual is of type H given that they participated and were successful"""
+    """This is the posterior probability that an individual is of type 1 given that they participated and were successful"""
     return pH*thetaH*qualprior(cues,support,lb,ub)/(pH*thetaH*qualprior(cues,support,lb,ub) + pL * thetaL*(1-qualprior(cues,support,lb,ub)))
 
 def posteriorfailure(cues,pH,pL,thetaH,thetaL,support,lb,ub):
+    """This is the posterior probability that an individual is of type 1 given that they participated and were unsuccessful"""
     return pH*(1-thetaH)*qualprior(cues,support,lb,ub)/(pH*(1-thetaH)*qualprior(cues,support,lb,ub) + pL * (1-thetaL)*(1-qualprior(cues,support,lb,ub)))
 
 def posteriornosignal(pH,pL):
+    """This is the posterior probability that an individual is of type 1 given that they did not participate"""
     return (1-pH)/((1-pH) + (1-pL))
 
 def f(support):
-    """governs how f affects payoffs"""
+    """governs how S_i affects payoffs if it does. Corresponds to g(S) in the text."""
     return support**2 + .1 
     #return 1
 
 def payoff(t,signal,support,cost,feedback):
+    """The payoff function"""
     if feedback=='True':
         return f(support)*t - cost*(signal==1)
     else:
         return t - cost*(signal==1)
 
 def exppayoffsignal(q,pH,pL,thetaH,thetaL,support,lb,ub,cost,feedback,cues):
+    """Expected payoff from signalling"""
     ps = thetaH*(q==1) + thetaL*(q==0) # prob of success
     tsuccess = posteriorsuccess(cues,pH,pL,thetaH,thetaL,support,lb,ub)
     tfailure = posteriorfailure(cues,pH,pL,thetaH,thetaL,support,lb,ub)
     return ps* payoff(tsuccess, 1, support, cost,feedback) + (1-ps)*payoff(tfailure,1,support,cost,feedback)
 
 def exppayoffnosignal(pH,pL,support,cost,feedback):
+    """Expected payoff from not signalling"""
     tnosignal = posteriornosignal(pH,pL)
     return payoff(tnosignal,0,support,cost,feedback) 
 
@@ -45,6 +49,7 @@ def exppayoffnosignal(pH,pL,support,cost,feedback):
 # equilibrium strategies
 
 def indifferencepoint(pL,*args):
+    """Function to solve the indifference between signalling and not signalling for semi-separating equilibria where type 0 is indifferent and therefore uses a mixed strategy"""
     thetaH, thetaL, support, lb, ub, costL, feedback, cues = args
     return exppayoffsignal(0, 1, pL, thetaH, thetaL, support, lb, ub, costL,feedback,cues) - exppayoffnosignal(1, pL, support,costL,feedback)
 
@@ -83,10 +88,11 @@ def plot_strategies(params):
 
 
 def norm_dist(val,mean,noise):
+    """Normal distribution pdf function"""
     return 1/(2*np.pi*noise**2)**(1/2)*(np.exp(-1/2*((val-mean)/noise)**2))
 
 def draw_interaction_updates(j,n,mean_val,noise):
-    """j is the individual whom i is visiting and n is the number of visits from i to j"""
+    """Function to provide an updated weight for j. j is the individual whom i is visiting and n is the number of visits from i to j"""
     weight_updates = 0
     for k in range(0,n):
         interaction_qual = np.random.normal(mean_val[j],noise) 
@@ -94,7 +100,7 @@ def draw_interaction_updates(j,n,mean_val,noise):
     return weight_updates
 
 def draw_interaction_updates_twoways(i,j,n,mean_val,noise):
-    """i is hte visitor, j is the visited and n is the number of visits from i to j. In two ways, both visiter and visited learn about each other"""
+    """Function to provide an updated weight for both i and j when there is two-way learning. i is the visitor, j is the visited and n is the number of visits from i to j. In two ways, both visiter and visited learn about each other"""
     weight_updates_j = 0
     weight_updates_i = 0
     for k in range(0,n):
@@ -105,25 +111,27 @@ def draw_interaction_updates_twoways(i,j,n,mean_val,noise):
     return weight_updates_j,weight_updates_i
 
 def bilateral_updates(N,weights,M, mean_val,noise, d):
-    """ M is the number of interactions per person. d is the discount factor. if d=1, there is no discounting."""
+    """ Function to draw pairwise interactions and the resulting update in weights when learning is only one-way.
+    M is the number of interactions per person. d is the discount factor. if d=1, there is no discounting."""
     interaction_mat = np.zeros((N,N))
-    for j in range(0,N):
-        weight_vector = np.array(weights[j,:])
+    for i in range(0,N):
+        weight_vector = np.array(weights[i,:])
         denom = sum(weight_vector)
         probs = weight_vector/denom
         interactions = np.random.multinomial(M,probs) ## alternatively, could interact with top M weights.
-        interaction_mat[j,:] = interactions
-        weight_vector = np.array([d*weight_vector[i] + draw_interaction_updates(i,interactions[i],mean_val,noise) for i in range(0,N)])
+        interaction_mat[i,:] = interactions
+        weight_vector = np.array([d*weight_vector[j] + draw_interaction_updates(j,interactions[j],mean_val,noise) for j in range(0,N)])
         weight_vector[weight_vector<0]=0
-        weights[j,:] = weight_vector
+        weights[i,:] = weight_vector
     return interaction_mat,weights
 
 def bilateral_updates_twoways(N,weights,M, mean_val,noise, d):
-    """ M is the number of interactions per person. d is the discount factor. if d=1, there is no discounting."""
+    """ Function to draw pairwise interactions and the resulting update in weights when learning is two-way.
+    M is the number of interactions per person. d is the discount factor. if d=1, there is no discounting."""
     interaction_mat = np.zeros((N,N))
     for i in range(0,N):
-        weight_vector_visitor = np.array(weights[i,:])
-        weight_vector_visited = np.array(weights[:,i])
+        weight_vector_visitor = np.array(weights[i,:]) # vector of weights from i to all j's
+        weight_vector_visited = np.array(weights[:,i]) # vector of weights from all j's to i
         denom = sum(weight_vector_visitor)
         probs = weight_vector_visitor/denom
         interactions = np.random.multinomial(M,probs) ## alternatively, could interact with top M weights.
@@ -136,13 +144,10 @@ def bilateral_updates_twoways(N,weights,M, mean_val,noise, d):
         weights[i,:] = weight_vector_visitor
         weights[:,i] = weight_vector_visited
     return interaction_mat,weights
-# def S(N,weights):
-#     """Alternative to S"""
-#     #support = np.sum(weights,axis=0)
-#     support = np.random.normal(np.sum(weights,axis=0),2*np.std(weights,axis=0))
-#     return (support-min(support))/(max(support)-min(support))
+
 
 def S(N,weights):
+    """ function determining S"""
     arr = np.max(weights,axis=1) ## what is the maximum weight that each j gives to other i's?
     probs = weights/arr[:,None] ## probability that individual j supports i is weight[j,i] over the maximum weight that j gives to any i
     num_support = np.zeros(N)
@@ -152,40 +157,3 @@ def S(N,weights):
     maxsupport = max(num_support)
     minsupport = min(num_support)
     return (num_support-minsupport)/(maxsupport - minsupport)
-
-    ########## alternative function formulation
-#bilateral unidirectional interactions: let each person choose M people to interact with
-# def draw_interaction_updates(i,n):
-#     """i is the individual whom j is interacting with and n is the number of interactions"""
-#     weight_updates = 0
-#     for k in range(0,n):
-#         weight_updates += np.random.normal(mean_val[i],1)
-#     return weight_updates
-
-# def bilateral_updates(weights,M):
-#     """Generate bilateral interactions that lead to individual learning about others' quality and updating of weights."""
-#     interaction_mat = np.zeros((N,N))
-#     for j in range(0,N): ## loop through all individuals
-#         weight_vector = np.array(weights[j,:]) ## find the weights that i puts on all others in the group
-#         denom = sum(weight_vector)
-#         probs = weight_vector/denom
-#         interactions = np.random.choice(range(N),M,replace=False, p=probs) ## draw M interactions with other members of the group using a multinomial. This vector says how many times i will interact with each j.
-#         interactions = [1 if i in interactions else 0 for i in range(100)]
-#         interaction_mat[j,:] = interactions ## we record this information
-#         weight_vector = np.array([weight_vector[i] + draw_interaction_updates(i,interactions[i]) for i in range(0,N)]) # update the weight vector after interactions with each j for which interaction>0
-#         weight_vector[weight_vector<0]=0 # if weight is negative, make it zero.
-#         weights[j,:] = weight_vector ## update the relevant row of the weight matrix.
-#         #weights[i,i] = 0 # put zero weight on oneself.
-#     return interaction_mat,weights
-
-# def bilateral_updates3(weights,M):
-#     """ M is the number of interactions per person"""
-#     interaction_mat = np.zeros((N,N))
-#     for j in range(0,N):
-#         interactions = np.argsort(weights[j,:])[-M:]
-#         for i in interactions:
-#             interaction_mat[j,i] = 1
-#             weights[j,i] = weights[j,i] + draw_interaction_updates(i,1)
-#     return interaction_mat,weights
-
-

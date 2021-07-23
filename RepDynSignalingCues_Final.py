@@ -28,7 +28,6 @@ theta = [.8,.6] # probabilities of success
 thetaH,thetaL = theta
 costH, costL = [.2,.4] # costs of signalling
 lb,ub = [.1,.9] # lower and upper bound of the priors on quality
-a = 1 # with M governs relative weight of public event versus pairwise interactions (private learning)
 M = 10 # number of people each individual chooses to interact with in the pairwise interactions
 d = .98 # memory
 Tmax = 300
@@ -55,7 +54,7 @@ for t in range(0,Tmax):
     if (cues == 'True') & (signaling =='False'):
         qhats = qualprior(cues,S_vec,lb,ub) # cues only: qhat = f(S_i)
         history[t,6,:] = qhats
-        weights = d*weights + a*qhats[None,:]
+        weights = d*weights + qhats[None,:]
     elif signaling =='True':
         qhats = np.zeros(N)
         for i in range(0,N):
@@ -72,23 +71,23 @@ for t in range(0,Tmax):
                     qhat = posteriorfailure(cues,pH,pL,thetaH,thetaL,S_vec[i],lb,ub)
                 history[t,6,i] = qhat
                 qhats[i] = qhat
-        weights = d*weights + a*qhats[None,:]
+        weights = d*weights + qhats[None,:]
 
 
 ## Make dataframe to export to R
 resultsdf = pd.DataFrame({'id':np.concatenate(tuple(([i]*Tmax for i in np.arange(N)))),'support':np.concatenate(tuple((history[:,2,i] for i in np.arange(N))),axis=None),'bilateral_interaction':np.concatenate(tuple((history[:,1,i] for i in np.arange(N))),axis=None),'time':[t for t in np.arange(Tmax)]*N,'qual':np.concatenate(tuple([qual[i]]*Tmax for i in np.arange(N))),'early_rep':np.concatenate(tuple([early_rep[i]]*Tmax for i in np.arange(N)))})
-resultsdf.to_csv('resultsdf_cue{}_sig{}_fd{}_d1.csv'.format(cues,signaling,feedback),index=False)
+resultsdf.to_csv('resultsdf_cue{}_sig{}_fd{}.csv'.format(cues,signaling,feedback),index=False)
 
 ### Output to plot strategies
 cues = 'True'
 signaling = 'True'
-feedback = 'True'
+feedback = 'False'
 theta = [.8,.6]
 thetaH,thetaL = theta
 costH, costL = [.2,.4]
 lb,ub = [.1,.9]
 plot_strategies([thetaH,thetaL,costH,costL,feedback,cues])
-support_grid = np.arange(0,1,0.05)
+support_grid = np.arange(0,1.05,0.05)
 strategies = [decision(thetaH, thetaL, s, lb, ub, costH, costL,feedback,cues) for s in support_grid]
 boostsuccess = [posteriorsuccess(cues,strategies[i][1],strategies[i][0],thetaH,thetaL,support_grid[i],lb,ub)-.5 if strategies[i][1] + strategies[i][0]>0 else 0 for i in range(len(support_grid)) ]
 boostfailure = [posteriorfailure(cues,strategies[i][1],strategies[i][0],thetaH,thetaL,support_grid[i],lb,ub)-.5 if strategies[i][1] + strategies[i][0]>0 else 0 for i in range(len(support_grid))]
